@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#6C5CE7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Captura de Ideias</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:'DM Sans','Segoe UI',sans-serif;background:#FAFBFC;color:#1a1a2e}
+::-webkit-scrollbar{width:0}
+input,textarea,button{font-family:inherit}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.app{max-width:480px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:#fff;position:relative;overflow:hidden}
+.header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid #e8ecf0;flex-shrink:0;z-index:10}
+.header-title{font-size:17px;font-weight:700;color:#1a1a2e;letter-spacing:-.3px}
+.content{flex:1;overflow-y:auto;padding-bottom:80px}
+.fab{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#6C5CE7,#a855f7);color:#fff;border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(108,92,231,.4);cursor:pointer;z-index:20;font-size:28px}
+.search-bar{display:flex;align-items:center;gap:8px;margin:12px 16px 8px;padding:10px 14px;background:#f8f9fa;border-radius:12px;border:1px solid #e8ecf0}
+.search-bar input{flex:1;border:none;outline:none;font-size:14px;background:transparent;color:#1a1a2e}
+.filters{display:flex;gap:6px;padding:0 16px 8px;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+.chip{padding:5px 12px;border-radius:20px;border:1px solid #e0e3e8;background:#fff;color:#636e72;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all .2s}
+.chip.active{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+
+.card{margin:0 16px 8px;padding:14px 16px;background:#fff;border-radius:14px;border:1px solid #e8ecf0;cursor:pointer;transition:all .15s}
+.card:active{transform:scale(.98);background:#f8f9fa}
+.card-text{font-size:14px;color:#2d3436;line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.card-meta{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.cat-badge{display:inline-flex;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.tag{padding:2px 7px;border-radius:5px;font-size:10px;font-weight:500;color:#636e72;background:#f1f2f3}
+.time{font-size:11px;color:#b2bec3;margin-left:auto}
+.type-icon{width:18px;height:18px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;margin-right:4px}
+.classifying{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500;color:#a855f7;background:#f3f0ff;animation:pulse 1.5s infinite}
+
+.capture-tabs{display:flex;border-bottom:1px solid #e8ecf0;flex-shrink:0}
+.capture-tab{flex:1;padding:12px 0;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;color:#b2bec3;background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s}
+.capture-tab.active{color:#6C5CE7;border-bottom-color:#6C5CE7}
+.text-area{flex:1;padding:16px;font-size:16px;line-height:1.6;border:none;outline:none;resize:none;background:transparent;color:#1a1a2e;font-family:inherit}
+.capture-actions{display:flex;gap:10px;padding:12px 16px;border-top:1px solid #e8ecf0;background:#fff;flex-shrink:0}
+.btn-primary{flex:1;padding:12px 0;border-radius:12px;background:linear-gradient(135deg,#6C5CE7,#a855f7);color:#fff;border:none;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary:disabled{opacity:.4;cursor:default}
+.btn-secondary{padding:10px 20px;border-radius:12px;background:#f1f2f3;color:#636e72;border:none;font-size:13px;cursor:pointer}
+
+.voice-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px}
+.voice-btn{width:100px;height:100px;border-radius:50%;background:#f1f2f3;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;transition:all .3s;font-size:36px}
+.voice-btn.recording{background:linear-gradient(135deg,#E17055,#fd7979);box-shadow:0 0 0 12px rgba(225,112,85,.15);animation:pulse 1.5s ease-in-out infinite}
+.voice-text{width:100%;min-height:80px;padding:12px 16px;font-size:15px;color:#2d3436;background:#f8f9fa;border-radius:12px;line-height:1.5;text-align:center}
+
+.photo-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px}
+.photo-btns{display:flex;gap:16px}
+.photo-btn{width:130px;height:130px;border-radius:20px;border:2px dashed #d0d5dd;background:#f8f9fa;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:#b2bec3;position:relative;overflow:hidden}
+.photo-btn input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+.photo-preview{max-width:100%;max-height:260px;border-radius:12px;object-fit:contain;border:1px solid #e8ecf0}
+
+.detail{flex:1;padding:16px;overflow-y:auto}
+.detail-label{font-size:11px;font-weight:600;color:#b2bec3;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.detail-text{font-size:15px;color:#2d3436;line-height:1.6;margin-bottom:16px;white-space:pre-wrap}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 40px;color:#b2bec3;text-align:center;gap:12px}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);padding:10px 24px;background:#1a1a2e;color:#fff;border-radius:24px;font-size:13px;font-weight:600;z-index:100;animation:fadeIn .2s}
+.back-btn{background:none;border:none;cursor:pointer;padding:4px;display:flex;font-size:22px;color:#636e72}
+.del-btn{background:none;border:none;cursor:pointer;padding:4px;font-size:18px;color:#E17055}
+
+.settings{flex:1;padding:16px;overflow-y:auto}
+.settings label{display:block;font-size:12px;font-weight:600;color:#636e72;margin-bottom:6px;margin-top:16px}
+.settings input[type=password],.settings input[type=text]{width:100%;padding:10px 12px;border:1px solid #e0e3e8;border-radius:10px;font-size:14px;outline:none;background:#f8f9fa}
+.settings input:focus{border-color:#6C5CE7}
+.settings .info{font-size:12px;color:#b2bec3;margin-top:6px;line-height:1.4}
+.settings .save-btn{margin-top:20px;width:100%;padding:12px;border-radius:12px;background:#6C5CE7;color:#fff;border:none;font-size:15px;font-weight:600;cursor:pointer}
+.settings .danger-zone{margin-top:32px;padding-top:16px;border-top:1px solid #e8ecf0}
+.settings .danger-btn{width:100%;padding:10px;border-radius:10px;background:#FEF5E7;color:#E17055;border:1px solid #f0d0c0;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px}
+.gear-btn{background:none;border:none;cursor:pointer;padding:4px;font-size:18px;color:#b2bec3}
+.status-badge{display:inline-flex;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;color:#0984E3;background:#E3F2FD}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+// ═══════════════════════════════════════════════════
+// CAPTURA DE IDEIAS — PWA Standalone
+// ═══════════════════════════════════════════════════
+
+// ── IndexedDB Storage ──
+const DB_NAME = 'ideias_db';
+const DB_VERSION = 1;
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('ideas')) {
+        const s = d.createObjectStore('ideas', { keyPath: 'id' });
+        s.createIndex('status', 'status');
+        s.createIndex('category', 'category');
+        s.createIndex('created_at', 'created_at');
+      }
+      if (!d.objectStoreNames.contains('settings')) {
+        d.createObjectStore('settings', { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(db); };
+    req.onerror = e => reject(e);
+  });
+}
+
+const Store = {
+  async getAll() {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('ideas', 'readonly');
+      const req = tx.objectStore('ideas').index('created_at').openCursor(null, 'prev');
+      const results = [];
+      req.onsuccess = e => {
+        const cursor = e.target.result;
+        if (cursor) { results.push(cursor.value); cursor.continue(); }
+        else resolve(results);
+      };
+      req.onerror = reject;
+    });
+  },
+  async get(id) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('ideas', 'readonly');
+      tx.objectStore('ideas').get(id).onsuccess = e => resolve(e.target.result);
+      tx.onerror = reject;
+    });
+  },
+  async put(idea) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('ideas', 'readwrite');
+      tx.objectStore('ideas').put(idea);
+      tx.oncomplete = () => resolve();
+      tx.onerror = reject;
+    });
+  },
+  async delete(id) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('ideas', 'readwrite');
+      tx.objectStore('ideas').delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = reject;
+    });
+  },
+  async getSetting(key) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('settings', 'readonly');
+      tx.objectStore('settings').get(key).onsuccess = e => resolve(e.target.result?.value || null);
+      tx.onerror = reject;
+    });
+  },
+  async setSetting(key, value) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('settings', 'readwrite');
+      tx.objectStore('settings').put({ key, value });
+      tx.oncomplete = () => resolve();
+      tx.onerror = reject;
+    });
+  },
+  async clearAll() {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('ideas', 'readwrite');
+      tx.objectStore('ideas').clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = reject;
+    });
+  }
+};
+
+// ── Helpers ──
+const uuid = () => crypto.randomUUID ? crypto.randomUUID() :
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+
+const esc = s => {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+};
+
+// ── Image Compression ──
+function compressImage(base64, maxWidth = 1200, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const compressed = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+        resolve(compressed);
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => reject(new Error('Falha ao carregar imagem'));
+    img.src = 'data:image/jpeg;base64,' + base64;
+  });
+}
+
+const fmtRelative = iso => {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'agora';
+  if (mins < 60) return mins + 'min';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h';
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return days + 'd';
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+};
+
+const fmtDate = iso => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+const CATS = {
+  ideia: { label: 'Ideia', color: '#6C5CE7', bg: '#EDE7F6' },
+  tarefa: { label: 'Tarefa', color: '#E17055', bg: '#FDECEA' },
+  referencia: { label: 'Referência', color: '#00B894', bg: '#E0F7EF' },
+  projeto: { label: 'Projeto', color: '#0984E3', bg: '#E3F2FD' },
+  indefinido: { label: 'Indefinido', color: '#636E72', bg: '#F1F2F3' },
+};
+const STATUS_L = { inbox: 'Inbox', processado: 'Processado', organizado: 'Organizado', arquivado: 'Arquivado' };
+const TYPE_ICON = { text: '✏️', voice: '🎙️', photo: '📷' };
+
+// ── AI ──
+const VALID_CATS = ['ideia', 'tarefa', 'referencia', 'projeto', 'indefinido'];
+
+function sanitizeAiResponse(ai) {
+  if (!ai || typeof ai !== 'object') return { category: 'indefinido', tags: [], summary: '' };
+  if (!VALID_CATS.includes(ai.category)) ai.category = 'indefinido';
+  if (!Array.isArray(ai.tags)) ai.tags = [];
+  ai.tags = ai.tags.filter(t => typeof t === 'string').slice(0, 5);
+  if (typeof ai.summary !== 'string') ai.summary = '';
+  if (ai.extracted_text !== undefined && typeof ai.extracted_text !== 'string') ai.extracted_text = '';
+  return ai;
+}
+
+async function classifyText(text, apiKey) {
+  if (!apiKey) return { category: 'indefinido', tags: [], summary: '' };
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', max_tokens: 200,
+        messages: [{ role: 'user', content: `Classifique esta anotação. Categorias: ideia, tarefa, referencia, projeto, indefinido.
+Sugira 1 a 3 tags curtas em português. Resumo de no máximo 10 palavras.
+Responda APENAS JSON: {"category":"...","tags":["..."],"summary":"..."}
+
+Anotação: "${text.substring(0, 500)}"` }]
+      })
+    });
+    const data = await res.json();
+    const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+    return sanitizeAiResponse(JSON.parse(raw));
+  } catch (e) { console.error('AI error:', e); return { category: 'indefinido', tags: [], summary: '' }; }
+}
+
+async function classifyPhoto(base64, apiKey) {
+  if (!apiKey) return { extracted_text: '', category: 'indefinido', tags: [], summary: '' };
+  try {
+    const mt = base64.startsWith('/9j') ? 'image/jpeg' : 'image/png';
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', max_tokens: 400,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mt, data: base64 } },
+          { type: 'text', text: `Extraia o texto desta foto de anotação manuscrita. Classifique: ideia, tarefa, referencia, projeto, indefinido. Tags 1-3 em português. Resumo max 10 palavras.
+Responda APENAS JSON: {"extracted_text":"...","category":"...","tags":["..."],"summary":"..."}` }
+        ]}]
+      })
+    });
+    const data = await res.json();
+    const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+    return sanitizeAiResponse(JSON.parse(raw));
+  } catch (e) { console.error('Photo AI error:', e); return { extracted_text: '', category: 'indefinido', tags: [], summary: '' }; }
+}
+
+// ── App State ──
+let state = {
+  view: 'inbox', // inbox | capture | detail | settings
+  ideas: [],
+  captureMode: 'text', // text | voice | photo
+  selectedId: null,
+  search: '',
+  filterCat: 'all',
+  filterStatus: 'all',
+  classifying: new Set(),
+  apiKey: null,
+  showExportReminder: false,
+  recording: false,
+  voiceText: '',
+  photoBase64: null,
+  photoPreview: null,
+};
+
+let recognition = null;
+let toastTimer = null;
+
+function showToast(msg) {
+  clearTimeout(toastTimer);
+  const el = document.getElementById('toast');
+  if (el) { el.textContent = msg; el.style.display = 'block'; toastTimer = setTimeout(() => el.style.display = 'none', 2500); }
+}
+
+// ── Render Engine ──
+function render() {
+  const app = document.getElementById('app');
+  if (state.view === 'capture') app.innerHTML = renderCapture();
+  else if (state.view === 'detail') app.innerHTML = renderDetail();
+  else if (state.view === 'settings') app.innerHTML = renderSettings();
+  else app.innerHTML = renderInbox();
+  app.innerHTML += '<div id="toast" class="toast" style="display:none"></div>';
+  bindEvents();
+}
+
+// ── INBOX ──
+function renderInbox() {
+  const filtered = state.ideas.filter(i => {
+    if (state.filterCat !== 'all' && i.category !== state.filterCat) return false;
+    if (state.filterStatus !== 'all' && i.status !== state.filterStatus) return false;
+    if (state.search) {
+      const q = state.search.toLowerCase();
+      return (i.raw_text || '').toLowerCase().includes(q) || (i.ai_summary || '').toLowerCase().includes(q) || (i.tags || []).some(t => t.toLowerCase().includes(q));
+    }
+    return true;
+  });
+  const inboxCount = state.ideas.filter(i => i.status === 'inbox').length;
+
+  let catChips = `<span class="chip ${state.filterCat === 'all' ? 'active' : ''}" data-filter-cat="all">Todas</span>`;
+  for (const [k, v] of Object.entries(CATS)) {
+    if (k === 'indefinido') continue;
+    catChips += `<span class="chip ${state.filterCat === k ? 'active' : ''}" data-filter-cat="${k}">${v.label}</span>`;
+  }
+
+  let statusChips = `<span class="chip ${state.filterStatus === 'all' ? 'active' : ''}" data-filter-status="all">Todos</span>`;
+  for (const [k, v] of Object.entries(STATUS_L)) {
+    statusChips += `<span class="chip ${state.filterStatus === k ? 'active' : ''}" data-filter-status="${k}">${v}</span>`;
+  }
+
+  let cards = '';
+  if (filtered.length === 0) {
+    cards = `<div class="empty">
+      <span style="font-size:40px">📥</span>
+      <span style="font-size:15px;font-weight:600">${state.ideas.length === 0 ? 'Nenhuma ideia ainda' : 'Nenhum resultado'}</span>
+      <span style="font-size:13px">${state.ideas.length === 0 ? 'Toque no + para capturar' : 'Tente outro filtro ou busca'}</span>
+    </div>`;
+  } else {
+    for (const idea of filtered) {
+      const cat = CATS[idea.category] || CATS.indefinido;
+      const isClassifying = state.classifying.has(idea.id);
+      const tagsHtml = (idea.tags || []).slice(0, 2).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+      const typeIcon = `<span class="type-icon" style="background:${idea.content_type === 'voice' ? '#FEF5E7' : idea.content_type === 'photo' ? '#E3F2FD' : '#F1F2F3'}">${TYPE_ICON[idea.content_type] || '✏️'}</span>`;
+      const badge = isClassifying
+        ? `<span class="classifying">⚡ Classificando...</span>`
+        : `<span class="cat-badge" style="color:${cat.color};background:${cat.bg}">${cat.label}</span>`;
+
+      cards += `<div class="card" data-id="${idea.id}">
+        <div class="card-text">${esc(idea.ai_summary || idea.raw_text || '(foto sem texto)')}</div>
+        <div class="card-meta">${typeIcon}${badge}${tagsHtml}<span class="time">${fmtRelative(idea.created_at)}</span></div>
+      </div>`;
+    }
+  }
+
+  const noKey = !state.apiKey ? `<div style="margin:8px 16px;padding:10px 14px;background:#FEF5E7;border-radius:10px;font-size:12px;color:#7D6608;cursor:pointer" id="no-key-banner">⚠️ API key não configurada — toque para configurar</div>` : '';
+
+  const unexported = state.ideas.filter(i => !i.exported).length;
+  const exportReminder = (state.showExportReminder && unexported > 0) ? `<div style="margin:8px 16px;padding:10px 14px;background:#E3F2FD;border-radius:10px;font-size:12px;color:#0984E3;display:flex;align-items:center;justify-content:space-between">
+    <span id="export-reminder-action" style="cursor:pointer;flex:1">📦 Você tem ${unexported} ideia${unexported > 1 ? 's' : ''} sem backup — toque para exportar</span>
+    <button id="export-reminder-dismiss" style="background:none;border:none;color:#0984E3;font-size:16px;cursor:pointer;padding:0 0 0 8px">✕</button>
+  </div>` : '';
+
+  return `<div class="header">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">⚡</span>
+      <span class="header-title">Captura de Ideias</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:#b2bec3;font-weight:600">${inboxCount} na inbox</span>
+      <button class="gear-btn" id="btn-settings">⚙️</button>
+    </div>
+  </div>
+  <div class="content">
+    ${noKey}
+    ${exportReminder}
+    <div class="search-bar">
+      <span style="color:#b2bec3">🔍</span>
+      <input type="text" placeholder="Buscar ideias..." value="${esc(state.search)}" id="search-input">
+      ${state.search ? '<button id="clear-search" style="background:none;border:none;cursor:pointer;color:#b2bec3;font-size:16px">✕</button>' : ''}
+    </div>
+    <div class="filters">${catChips}</div>
+    <div class="filters" style="padding-bottom:4px">${statusChips}</div>
+    ${cards}
+  </div>
+  <button class="fab" id="btn-new">+</button>`;
+}
+
+// ── CAPTURE ──
+function renderCapture() {
+  const tabs = ['text', 'voice', 'photo'];
+  const tabLabels = { text: '✏️ Texto', voice: '🎙️ Voz', photo: '📷 Imagem' };
+  let tabsHtml = '';
+  for (const t of tabs) {
+    tabsHtml += `<button class="capture-tab ${state.captureMode === t ? 'active' : ''}" data-tab="${t}">${tabLabels[t]}</button>`;
+  }
+
+  let body = '';
+  if (state.captureMode === 'text') {
+    body = `<textarea class="text-area" id="text-input" placeholder="Digite sua ideia..." autofocus></textarea>
+      <div class="capture-actions"><button class="btn-primary" id="btn-save">✈️ Salvar</button></div>`;
+  } else if (state.captureMode === 'voice') {
+    body = `<div class="voice-area">
+      <button class="voice-btn ${state.recording ? 'recording' : ''}" id="btn-voice">${state.recording ? '⏹️' : '🎙️'}</button>
+      <span style="font-size:13px;color:#b2bec3;font-weight:500">${state.recording ? 'Gravando... toque para parar' : 'Toque para gravar'}</span>
+      ${state.voiceText ? `<div class="voice-text">${esc(state.voiceText)}</div>` : ''}
+    </div>
+    <div class="capture-actions"><button class="btn-primary" id="btn-save" ${!state.voiceText ? 'disabled' : ''}>✈️ Salvar</button></div>`;
+  } else {
+    const preview = state.photoPreview
+      ? `<img src="${state.photoPreview}" class="photo-preview">
+         <button class="btn-secondary" id="btn-clear-photo">Remover</button>`
+      : `<div class="photo-btns">
+          <div class="photo-btn">
+            <span style="font-size:28px">📸</span>
+            <span style="font-size:12px;font-weight:500">Câmera</span>
+            <input type="file" accept="image/*" capture="environment" id="input-camera">
+          </div>
+          <div class="photo-btn">
+            <span style="font-size:28px">🖼️</span>
+            <span style="font-size:12px;font-weight:500">Galeria / Arquivo</span>
+            <input type="file" accept="image/*" id="input-gallery">
+          </div>
+        </div>`;
+    body = `<div class="photo-area">${preview}</div>
+      <div class="capture-actions"><button class="btn-primary" id="btn-save" ${!state.photoBase64 ? 'disabled' : ''}>✈️ Salvar</button></div>`;
+  }
+
+  return `<div class="header">
+    <button class="back-btn" id="btn-back">←</button>
+    <span class="header-title">Nova Captura</span>
+    <div style="width:30px"></div>
+  </div>
+  <div class="capture-tabs">${tabsHtml}</div>
+  ${body}`;
+}
+
+// ── DETAIL ──
+function renderDetail() {
+  const idea = state.ideas.find(i => i.id === state.selectedId);
+  if (!idea) return `<div class="header"><button class="back-btn" id="btn-back">←</button><span class="header-title">Não encontrado</span><div style="width:30px"></div></div>`;
+
+  const cat = CATS[idea.category] || CATS.indefinido;
+  const tagsHtml = (idea.tags || []).map(t => `<span class="tag" style="font-size:12px;padding:4px 10px">${esc(t)}</span>`).join('');
+
+  let photoHtml = '';
+  if (idea.content_type === 'photo' && idea.photo_base64) {
+    const mt = idea.photo_base64.startsWith('/9j') ? 'jpeg' : 'png';
+    photoHtml = `<div class="detail-label">Foto</div><img src="data:image/${mt};base64,${idea.photo_base64}" style="width:100%;border-radius:12px;margin-bottom:16px;border:1px solid #e8ecf0">`;
+  }
+
+  let ocrHtml = '';
+  if (idea.ocr_text) {
+    ocrHtml = `<div class="detail-label">Texto extraído (OCR)</div><div class="detail-text">${esc(idea.ocr_text)}</div>`;
+  }
+
+  const statusOpts = Object.entries(STATUS_L).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('');
+
+  return `<div class="header">
+    <button class="back-btn" id="btn-back">←</button>
+    <span class="header-title">Detalhe</span>
+    <button class="del-btn" id="btn-delete" data-id="${idea.id}">🗑️</button>
+  </div>
+  <div class="detail">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <span class="cat-badge" style="color:${cat.color};background:${cat.bg}">${cat.label}</span>
+      <span style="font-size:12px;color:#b2bec3">${fmtDate(idea.created_at)}</span>
+      <select id="status-select" style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;color:#0984E3;background:#E3F2FD;border:none;outline:none">${statusOpts}</select>
+    </div>
+    ${idea.ai_summary ? `<div class="detail-label">Resumo IA</div><div class="detail-text" style="color:#6C5CE7;font-weight:500;font-size:14px">${esc(idea.ai_summary)}</div>` : ''}
+    ${photoHtml}${ocrHtml}
+    <div class="detail-label">${idea.content_type === 'voice' ? 'Transcrição' : idea.content_type === 'photo' ? 'Observações' : 'Conteúdo'}</div>
+    <div class="detail-text">${esc(idea.raw_text || '(sem texto)')}</div>
+    ${tagsHtml ? `<div class="detail-label">Tags</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">${tagsHtml}</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <span style="font-size:11px;color:#b2bec3">Tipo: ${idea.content_type}</span>
+      ${idea.exported ? '<span style="font-size:11px;color:#00B894">Exportado</span>' : ''}
+    </div>
+  </div>`;
+}
+
+// ── SETTINGS ──
+function renderSettings() {
+  return `<div class="header">
+    <button class="back-btn" id="btn-back">←</button>
+    <span class="header-title">Configurações</span>
+    <div style="width:30px"></div>
+  </div>
+  <div class="settings">
+    <h3 style="font-size:15px;color:#1a1a2e;margin-bottom:4px">API Anthropic</h3>
+    <p class="info">Necessária para classificação automática por IA. A chave fica armazenada apenas no seu dispositivo (IndexedDB local).</p>
+    <label for="api-key-input">API Key</label>
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." value="${esc(state.apiKey || '')}">
+    <p class="info">Obtenha em <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:#6C5CE7">console.anthropic.com</a></p>
+    <button class="save-btn" id="btn-save-settings">Salvar configurações</button>
+    <div class="danger-zone">
+      <h3 style="font-size:14px;color:#E17055;margin-bottom:4px">Zona de risco</h3>
+      <button class="danger-btn" id="btn-export">📦 Exportar todas as ideias (JSON)</button>
+      <button class="danger-btn" id="btn-clear-all" style="background:#fde;border-color:#e8b;color:#c0392b">🗑️ Apagar todas as ideias</button>
+    </div>
+  </div>`;
+}
+
+// ── Event Binding ──
+function bindEvents() {
+  // Inbox
+  document.getElementById('btn-new')?.addEventListener('click', () => { state.view = 'capture'; state.captureMode = 'text'; state.voiceText = ''; state.photoBase64 = null; state.photoPreview = null; render(); });
+  document.getElementById('btn-settings')?.addEventListener('click', () => { state.view = 'settings'; render(); });
+  document.getElementById('no-key-banner')?.addEventListener('click', () => { state.view = 'settings'; render(); });
+  document.getElementById('export-reminder-action')?.addEventListener('click', async () => {
+    const json = JSON.stringify(state.ideas, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ideias_export_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    await Store.setSetting('lastExportDate', new Date().toISOString());
+    state.showExportReminder = false;
+    render(); showToast('Exportado!');
+  });
+  document.getElementById('export-reminder-dismiss')?.addEventListener('click', async () => {
+    state.showExportReminder = false;
+    await Store.setSetting('reminderDismissed', new Date().toISOString());
+    render();
+  });
+  document.getElementById('search-input')?.addEventListener('input', e => { state.search = e.target.value; render(); document.getElementById('search-input')?.focus(); });
+  document.getElementById('clear-search')?.addEventListener('click', () => { state.search = ''; render(); });
+
+  document.querySelectorAll('[data-filter-cat]').forEach(el => el.addEventListener('click', () => {
+    state.filterCat = el.dataset.filterCat === state.filterCat ? 'all' : el.dataset.filterCat; render();
+  }));
+  document.querySelectorAll('[data-filter-status]').forEach(el => el.addEventListener('click', () => {
+    state.filterStatus = el.dataset.filterStatus === state.filterStatus ? 'all' : el.dataset.filterStatus; render();
+  }));
+  document.querySelectorAll('.card[data-id]').forEach(el => el.addEventListener('click', () => {
+    state.selectedId = el.dataset.id; state.view = 'detail'; render();
+  }));
+
+  // Back
+  document.getElementById('btn-back')?.addEventListener('click', () => {
+    if (state.recording && recognition) { recognition.stop(); state.recording = false; }
+    state.view = 'inbox'; state.selectedId = null; render();
+  });
+
+  // Capture tabs
+  document.querySelectorAll('[data-tab]').forEach(el => el.addEventListener('click', () => {
+    if (state.recording && recognition) { recognition.stop(); state.recording = false; }
+    state.captureMode = el.dataset.tab; state.voiceText = ''; state.photoBase64 = null; state.photoPreview = null; render();
+  }));
+
+  // Save
+  document.getElementById('btn-save')?.addEventListener('click', saveCapture);
+
+  // Text enter
+  document.getElementById('text-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveCapture(); }
+  });
+
+  // Voice
+  document.getElementById('btn-voice')?.addEventListener('click', toggleVoice);
+
+  // Photo inputs
+  document.getElementById('input-camera')?.addEventListener('change', handleFileInput);
+  document.getElementById('input-gallery')?.addEventListener('change', handleFileInput);
+  document.getElementById('btn-clear-photo')?.addEventListener('click', () => { state.photoBase64 = null; state.photoPreview = null; render(); });
+
+  // Detail
+  document.getElementById('btn-delete')?.addEventListener('click', async e => {
+    if (confirm('Remover esta ideia?')) {
+      await Store.delete(e.currentTarget.dataset.id);
+      state.ideas = state.ideas.filter(i => i.id !== e.currentTarget.dataset.id);
+      state.view = 'inbox'; state.selectedId = null; render(); showToast('Removido');
+    }
+  });
+  document.getElementById('status-select')?.addEventListener('change', async e => {
+    const idea = state.ideas.find(i => i.id === state.selectedId);
+    if (idea) {
+      idea.status = e.target.value;
+      idea.updated_at = new Date().toISOString();
+      await Store.put(idea); render(); showToast('Status atualizado');
+    }
+  });
+
+  // Settings
+  document.getElementById('btn-save-settings')?.addEventListener('click', async () => {
+    const key = document.getElementById('api-key-input')?.value?.trim() || '';
+    state.apiKey = key || null;
+    await Store.setSetting('apiKey', state.apiKey);
+    showToast('Configurações salvas');
+    state.view = 'inbox'; render();
+  });
+  document.getElementById('btn-export')?.addEventListener('click', async () => {
+    const json = JSON.stringify(state.ideas, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ideias_export_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    await Store.setSetting('lastExportDate', new Date().toISOString());
+    state.showExportReminder = false;
+    showToast('Exportado!');
+  });
+  document.getElementById('btn-clear-all')?.addEventListener('click', async () => {
+    if (confirm('Tem certeza? Todas as ideias serão apagadas permanentemente.')) {
+      await Store.clearAll(); state.ideas = []; state.view = 'inbox'; render(); showToast('Tudo apagado');
+    }
+  });
+}
+
+// ── File handler ──
+function handleFileInput(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const rawBase64 = reader.result.split(',')[1];
+    try {
+      const compressed = await compressImage(rawBase64, 1200, 0.7);
+      state.photoBase64 = compressed;
+      state.photoPreview = 'data:image/jpeg;base64,' + compressed;
+    } catch (err) {
+      console.warn('Compressão falhou, usando original:', err);
+      state.photoPreview = reader.result;
+      state.photoBase64 = rawBase64;
+    }
+    render();
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Voice ──
+function toggleVoice() {
+  if (state.recording) {
+    recognition?.stop(); state.recording = false; render(); return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('Navegador não suporta voz'); return; }
+  recognition = new SR();
+  recognition.lang = 'pt-BR';
+  recognition.interimResults = true;
+  recognition.continuous = true;
+  let finalText = '';
+  recognition.onresult = e => {
+    let interim = '';
+    for (let i = 0; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript + ' ';
+      else interim = e.results[i][0].transcript;
+    }
+    state.voiceText = finalText + interim;
+    const el = document.querySelector('.voice-text');
+    if (el) el.textContent = state.voiceText;
+    else render();
+  };
+  recognition.onerror = () => { state.recording = false; render(); showToast('Erro no reconhecimento'); };
+  recognition.onend = () => { state.recording = false; render(); };
+  recognition.start();
+  state.recording = true;
+  render();
+}
+
+// ── Save ──
+async function saveCapture() {
+  let rawText = '', contentType = 'text', photo = null;
+
+  if (state.captureMode === 'text') {
+    rawText = document.getElementById('text-input')?.value?.trim() || '';
+    if (!rawText) return;
+  } else if (state.captureMode === 'voice') {
+    rawText = state.voiceText.trim();
+    contentType = 'voice';
+    if (!rawText) return;
+  } else {
+    contentType = 'photo';
+    photo = state.photoBase64;
+    if (!photo) return;
+  }
+
+  const entry = {
+    id: uuid(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    content_type: contentType,
+    raw_text: rawText,
+    photo_base64: photo,
+    ocr_text: null,
+    category: 'indefinido',
+    tags: [],
+    ai_summary: '',
+    status: 'inbox',
+    group_id: null,
+    exported: false,
+    export_date: null,
+  };
+
+  await Store.put(entry);
+  state.ideas.unshift(entry);
+  state.view = 'inbox';
+  state.voiceText = '';
+  state.photoBase64 = null;
+  state.photoPreview = null;
+  render();
+  showToast('Capturado!');
+
+  // AI async
+  if (state.apiKey) {
+    state.classifying.add(entry.id);
+    render();
+    let ai;
+    if (contentType === 'photo' && photo) ai = await classifyPhoto(photo, state.apiKey);
+    else if (rawText) ai = await classifyText(rawText, state.apiKey);
+
+    if (ai) {
+      entry.category = ai.category || 'indefinido';
+      entry.tags = ai.tags || [];
+      entry.ai_summary = ai.summary || '';
+      if (ai.extracted_text) { entry.ocr_text = ai.extracted_text; entry.raw_text = entry.raw_text || ai.extracted_text; }
+      entry.updated_at = new Date().toISOString();
+      await Store.put(entry);
+      const idx = state.ideas.findIndex(i => i.id === entry.id);
+      if (idx >= 0) state.ideas[idx] = entry;
+    }
+    state.classifying.delete(entry.id);
+    render();
+  }
+}
+
+// ── Init ──
+async function init() {
+  await openDB();
+  state.ideas = await Store.getAll();
+  state.apiKey = await Store.getSetting('apiKey');
+
+  // Check if export reminder should show (7 days since last export or dismissal)
+  const lastExport = await Store.getSetting('lastExportDate');
+  const lastDismiss = await Store.getSetting('reminderDismissed');
+  const lastAction = [lastExport, lastDismiss].filter(Boolean).sort().pop();
+  const daysSince = lastAction ? (Date.now() - new Date(lastAction).getTime()) / 86400000 : 999;
+  const hasUnexported = state.ideas.some(i => !i.exported);
+  state.showExportReminder = daysSince >= 7 && hasUnexported;
+
+  render();
+
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    try { await navigator.serviceWorker.register('./sw.js'); } catch (e) { console.log('SW registration failed:', e); }
+  }
+}
+
+init();
+</script>
+</body>
+</html>
