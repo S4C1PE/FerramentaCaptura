@@ -253,7 +253,7 @@ async function classifyText(text, apiKey) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', max_tokens: 200,
+        model: 'claude-sonnet-4-6', max_tokens: 200,
         messages: [{ role: 'user', content: `Classifique esta anotação. Categorias: ideia, tarefa, referencia, projeto, indefinido.
 Sugira 1 a 3 tags curtas em português. Resumo de no máximo 10 palavras.
 Responda APENAS JSON: {"category":"...","tags":["..."],"summary":"..."}
@@ -262,9 +262,10 @@ Anotação: "${text.substring(0, 500)}"` }]
       })
     });
     const data = await res.json();
+    if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     return sanitizeAiResponse(JSON.parse(raw));
-  } catch (e) { console.error('AI error:', e); return { category: 'indefinido', tags: [], summary: '' }; }
+  } catch (e) { console.error('AI error:', e); showToast('Erro IA: ' + e.message); return { category: 'indefinido', tags: [], summary: '' }; }
 }
 
 async function classifyPhoto(base64, apiKey) {
@@ -275,7 +276,7 @@ async function classifyPhoto(base64, apiKey) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', max_tokens: 400,
+        model: 'claude-sonnet-4-6', max_tokens: 400,
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: mt, data: base64 } },
           { type: 'text', text: `Extraia o texto desta foto de anotação manuscrita. Classifique: ideia, tarefa, referencia, projeto, indefinido. Tags 1-3 em português. Resumo max 10 palavras.
@@ -284,9 +285,10 @@ Responda APENAS JSON: {"extracted_text":"...","category":"...","tags":["..."],"s
       })
     });
     const data = await res.json();
+    if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     return sanitizeAiResponse(JSON.parse(raw));
-  } catch (e) { console.error('Photo AI error:', e); return { extracted_text: '', category: 'indefinido', tags: [], summary: '' }; }
+  } catch (e) { console.error('Photo AI error:', e); showToast('Erro IA: ' + e.message); return { extracted_text: '', category: 'indefinido', tags: [], summary: '' }; }
 }
 
 // ── App State ──
