@@ -235,10 +235,17 @@ const TYPE_ICON = { text: '✏️', voice: '🎙️', photo: '📷' };
 
 // ── AI ──
 const VALID_CATS = ['ideia', 'tarefa', 'referencia', 'projeto', 'indefinido'];
+// Verticais híbridas: a IA pode propor valores novos além destas listas-base.
+const AREAS_BASE = ['Trabalho', 'Casa', 'Carro', 'Saúde', 'Finanças', 'Hobbies', 'Pessoal', 'Estudos'];
+const CONTEXTS_BASE = ['@computador', '@celular', '@rua', '@ligar', '@comprar', '@casa', '@aguardando'];
 
 function sanitizeAiResponse(ai) {
-  if (!ai || typeof ai !== 'object') return { category: 'indefinido', tags: [], summary: '' };
+  if (!ai || typeof ai !== 'object') return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '' };
   if (!VALID_CATS.includes(ai.category)) ai.category = 'indefinido';
+  ai.area = (typeof ai.area === 'string' ? ai.area : '').trim().slice(0, 40);
+  ai.context = (typeof ai.context === 'string' ? ai.context : '').trim().slice(0, 40);
+  ai.actionable = ai.actionable === true || ai.actionable === 'true';
+  ai.next_step = (typeof ai.next_step === 'string' ? ai.next_step : '').trim();
   if (!Array.isArray(ai.tags)) ai.tags = [];
   ai.tags = ai.tags.filter(t => typeof t === 'string').slice(0, 5);
   if (typeof ai.summary !== 'string') ai.summary = '';
@@ -247,16 +254,22 @@ function sanitizeAiResponse(ai) {
 }
 
 async function classifyText(text, apiKey) {
-  if (!apiKey) return { category: 'indefinido', tags: [], summary: '' };
+  if (!apiKey) return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '' };
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 200,
-        messages: [{ role: 'user', content: `Classifique esta anotação. Categorias: ideia, tarefa, referencia, projeto, indefinido.
-Sugira 1 a 3 tags curtas em português. Resumo de no máximo 10 palavras.
-Responda APENAS JSON: {"category":"...","tags":["..."],"summary":"..."}
+        model: 'claude-sonnet-4-6', max_tokens: 300,
+        messages: [{ role: 'user', content: `Classifique esta anotação em várias dimensões.
+- "category": uma de [ideia, tarefa, referencia, projeto, indefinido].
+- "area": área de vida. Prefira uma destas, mas crie outra se fizer mais sentido: ${AREAS_BASE.join(', ')}.
+- "context": contexto GTD de onde/com o quê agir (formato @algo). Prefira um destes, mas crie outro se necessário: ${CONTEXTS_BASE.join(', ')}. Use "" se não se aplica.
+- "actionable": true se exige uma ação concreta, senão false.
+- "next_step": se actionable, a próxima ação concreta em poucas palavras; senão "".
+- "tags": 1 a 3 tags curtas em português.
+- "summary": resumo de no máximo 10 palavras.
+Responda APENAS JSON: {"category":"...","area":"...","context":"...","actionable":false,"next_step":"...","tags":["..."],"summary":"..."}
 
 Anotação: "${text.substring(0, 500)}"` }]
       })
@@ -265,22 +278,30 @@ Anotação: "${text.substring(0, 500)}"` }]
     if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     return sanitizeAiResponse(JSON.parse(raw));
-  } catch (e) { console.error('AI error:', e); alert('Erro IA (texto): ' + e.message); return { category: 'indefinido', tags: [], summary: '' }; }
+  } catch (e) { console.error('AI error:', e); showToast('Erro IA: ' + e.message); return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '', _error: e.message }; }
 }
 
 async function classifyPhoto(base64, apiKey) {
-  if (!apiKey) return { extracted_text: '', category: 'indefinido', tags: [], summary: '' };
+  if (!apiKey) return { extracted_text: '', category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '' };
   try {
     const mt = base64.startsWith('/9j') ? 'image/jpeg' : 'image/png';
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 400,
+        model: 'claude-sonnet-4-6', max_tokens: 500,
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: mt, data: base64 } },
-          { type: 'text', text: `Extraia o texto desta foto de anotação manuscrita. Classifique: ideia, tarefa, referencia, projeto, indefinido. Tags 1-3 em português. Resumo max 10 palavras.
-Responda APENAS JSON: {"extracted_text":"...","category":"...","tags":["..."],"summary":"..."}` }
+          { type: 'text', text: `Extraia o texto desta foto de anotação manuscrita e classifique em várias dimensões.
+- "extracted_text": o texto extraído da foto.
+- "category": uma de [ideia, tarefa, referencia, projeto, indefinido].
+- "area": área de vida. Prefira uma destas, mas crie outra se fizer mais sentido: ${AREAS_BASE.join(', ')}.
+- "context": contexto GTD (formato @algo). Prefira um destes, mas crie outro se necessário: ${CONTEXTS_BASE.join(', ')}. Use "" se não se aplica.
+- "actionable": true se exige uma ação concreta, senão false.
+- "next_step": se actionable, a próxima ação concreta em poucas palavras; senão "".
+- "tags": 1 a 3 tags curtas em português.
+- "summary": resumo de no máximo 10 palavras.
+Responda APENAS JSON: {"extracted_text":"...","category":"...","area":"...","context":"...","actionable":false,"next_step":"...","tags":["..."],"summary":"..."}` }
         ]}]
       })
     });
@@ -288,7 +309,23 @@ Responda APENAS JSON: {"extracted_text":"...","category":"...","tags":["..."],"s
     if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     return sanitizeAiResponse(JSON.parse(raw));
-  } catch (e) { console.error('Photo AI error:', e); alert('Erro IA (foto): ' + e.message); return { extracted_text: '', category: 'indefinido', tags: [], summary: '' }; }
+  } catch (e) { console.error('Photo AI error:', e); showToast('Erro IA: ' + e.message); return { extracted_text: '', category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '', _error: e.message }; }
+}
+
+// Aplica o resultado da IA num item (usado na captura e na reclassificação)
+function applyClassification(entry, ai) {
+  if (!ai) return;
+  if (ai._error) { entry.ai_error = ai._error; entry.updated_at = new Date().toISOString(); return; }
+  entry.category = ai.category || 'indefinido';
+  entry.area = ai.area || '';
+  entry.context = ai.context || '';
+  entry.actionable = !!ai.actionable;
+  entry.next_step = ai.next_step || '';
+  entry.tags = ai.tags || [];
+  entry.ai_summary = ai.summary || '';
+  if (ai.extracted_text) { entry.ocr_text = ai.extracted_text; entry.raw_text = entry.raw_text || ai.extracted_text; }
+  entry.ai_error = null;
+  entry.updated_at = new Date().toISOString();
 }
 
 // ── App State ──
@@ -300,6 +337,7 @@ let state = {
   search: '',
   filterCat: 'all',
   filterStatus: 'all',
+  filterArea: 'all',
   classifying: new Set(),
   apiKey: null,
   showExportReminder: false,
@@ -307,6 +345,7 @@ let state = {
   voiceText: '',
   photoBase64: null,
   photoPreview: null,
+  editing: false,
 };
 
 let recognition = null;
@@ -334,6 +373,7 @@ function renderInbox() {
   const filtered = state.ideas.filter(i => {
     if (state.filterCat !== 'all' && i.category !== state.filterCat) return false;
     if (state.filterStatus !== 'all' && i.status !== state.filterStatus) return false;
+    if (state.filterArea !== 'all' && (i.area || '') !== state.filterArea) return false;
     if (state.search) {
       const q = state.search.toLowerCase();
       return (i.raw_text || '').toLowerCase().includes(q) || (i.ai_summary || '').toLowerCase().includes(q) || (i.tags || []).some(t => t.toLowerCase().includes(q));
@@ -353,6 +393,16 @@ function renderInbox() {
     statusChips += `<span class="chip ${state.filterStatus === k ? 'active' : ''}" data-filter-status="${k}">${v}</span>`;
   }
 
+  // Áreas presentes nos itens (verticais híbridas — geradas dinamicamente)
+  const areasPresent = [...new Set(state.ideas.map(i => i.area).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  let areaChips = '';
+  if (areasPresent.length) {
+    areaChips = `<span class="chip ${state.filterArea === 'all' ? 'active' : ''}" data-filter-area="all">Toda área</span>`;
+    for (const a of areasPresent) {
+      areaChips += `<span class="chip ${state.filterArea === a ? 'active' : ''}" data-filter-area="${esc(a)}">${esc(a)}</span>`;
+    }
+  }
+
   let cards = '';
   if (filtered.length === 0) {
     cards = `<div class="empty">
@@ -365,6 +415,7 @@ function renderInbox() {
       const cat = CATS[idea.category] || CATS.indefinido;
       const isClassifying = state.classifying.has(idea.id);
       const tagsHtml = (idea.tags || []).slice(0, 2).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+      const areaHtml = idea.area ? `<span class="tag" style="background:#EDE7F6;color:#6C5CE7">${esc(idea.area)}</span>` : '';
       const typeIcon = `<span class="type-icon" style="background:${idea.content_type === 'voice' ? '#FEF5E7' : idea.content_type === 'photo' ? '#E3F2FD' : '#F1F2F3'}">${TYPE_ICON[idea.content_type] || '✏️'}</span>`;
       const badge = isClassifying
         ? `<span class="classifying">⚡ Classificando...</span>`
@@ -372,7 +423,7 @@ function renderInbox() {
 
       cards += `<div class="card" data-id="${idea.id}">
         <div class="card-text">${esc(idea.ai_summary || idea.raw_text || '(foto sem texto)')}</div>
-        <div class="card-meta">${typeIcon}${badge}${tagsHtml}<span class="time">${fmtRelative(idea.created_at)}</span></div>
+        <div class="card-meta">${typeIcon}${badge}${areaHtml}${tagsHtml}<span class="time">${fmtRelative(idea.created_at)}</span></div>
       </div>`;
     }
   }
@@ -404,6 +455,7 @@ function renderInbox() {
       ${state.search ? '<button id="clear-search" style="background:none;border:none;cursor:pointer;color:#b2bec3;font-size:16px">✕</button>' : ''}
     </div>
     <div class="filters">${catChips}</div>
+    ${areaChips ? `<div class="filters">${areaChips}</div>` : ''}
     <div class="filters" style="padding-bottom:4px">${statusChips}</div>
     ${cards}
   </div>
@@ -464,21 +516,64 @@ function renderDetail() {
   const idea = state.ideas.find(i => i.id === state.selectedId);
   if (!idea) return `<div class="header"><button class="back-btn" id="btn-back">←</button><span class="header-title">Não encontrado</span><div style="width:30px"></div></div>`;
 
-  const cat = CATS[idea.category] || CATS.indefinido;
-  const tagsHtml = (idea.tags || []).map(t => `<span class="tag" style="font-size:12px;padding:4px 10px">${esc(t)}</span>`).join('');
-
   let photoHtml = '';
   if (idea.content_type === 'photo' && idea.photo_base64) {
     const mt = idea.photo_base64.startsWith('/9j') ? 'jpeg' : 'png';
     photoHtml = `<div class="detail-label">Foto</div><img src="data:image/${mt};base64,${idea.photo_base64}" style="width:100%;border-radius:12px;margin-bottom:16px;border:1px solid #e8ecf0">`;
   }
 
+  // ── EDIT MODE ──
+  if (state.editing) {
+    const catOpts = Object.entries(CATS).map(([k, v]) => `<option value="${k}" ${idea.category === k ? 'selected' : ''}>${v.label}</option>`).join('');
+    const areaOpts = AREAS_BASE.map(a => `<option value="${esc(a)}">`).join('');
+    const ctxOpts = CONTEXTS_BASE.map(c => `<option value="${esc(c)}">`).join('');
+    return `<div class="header">
+      <button class="back-btn" id="btn-edit-cancel">←</button>
+      <span class="header-title">Editar</span>
+      <div style="width:30px"></div>
+    </div>
+    <div class="detail">
+      ${photoHtml}
+      <div class="settings">
+        <label>Conteúdo</label>
+        <textarea id="edit-text" style="width:100%;min-height:90px;padding:10px 12px;border:1px solid #e0e3e8;border-radius:10px;font-size:14px;outline:none;background:#f8f9fa;font-family:inherit">${esc(idea.raw_text || '')}</textarea>
+        <label>Tipo</label>
+        <select id="edit-cat" style="width:100%;padding:10px 12px;border:1px solid #e0e3e8;border-radius:10px;font-size:14px;outline:none;background:#f8f9fa">${catOpts}</select>
+        <label>Área de vida</label>
+        <input type="text" id="edit-area" list="areas-list" value="${esc(idea.area || '')}" placeholder="ex.: Carro, Trabalho...">
+        <datalist id="areas-list">${areaOpts}</datalist>
+        <label>Contexto (@)</label>
+        <input type="text" id="edit-context" list="ctx-list" value="${esc(idea.context || '')}" placeholder="ex.: @computador, @comprar...">
+        <datalist id="ctx-list">${ctxOpts}</datalist>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:16px"><input type="checkbox" id="edit-actionable" ${idea.actionable ? 'checked' : ''} style="width:auto"> Acionável</label>
+        <label>Próximo passo (se acionável)</label>
+        <input type="text" id="edit-nextstep" value="${esc(idea.next_step || '')}" placeholder="ex.: ligar na concessionária">
+        <label>Tags (separadas por vírgula)</label>
+        <input type="text" id="edit-tags" value="${esc((idea.tags || []).join(', '))}" placeholder="ex.: compras, urgente">
+        <button class="save-btn" id="btn-edit-save">Salvar</button>
+        <button class="danger-btn" id="btn-edit-cancel2" style="background:#f1f2f3;color:#636e72;border-color:#e0e3e8">Cancelar</button>
+      </div>
+    </div>`;
+  }
+
+  // ── VIEW MODE ──
+  const cat = CATS[idea.category] || CATS.indefinido;
+  const tagsHtml = (idea.tags || []).map(t => `<span class="tag" style="font-size:12px;padding:4px 10px">${esc(t)}</span>`).join('');
+  const statusOpts = Object.entries(STATUS_L).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('');
+
   let ocrHtml = '';
   if (idea.ocr_text) {
     ocrHtml = `<div class="detail-label">Texto extraído (OCR)</div><div class="detail-text">${esc(idea.ocr_text)}</div>`;
   }
 
-  const statusOpts = Object.entries(STATUS_L).map(([k, v]) => `<option value="${k}" ${idea.status === k ? 'selected' : ''}>${v}</option>`).join('');
+  const errHtml = idea.ai_error ? `<div style="margin-bottom:16px;padding:10px 14px;background:#FDECEA;border-radius:10px;font-size:12px;color:#c0392b">⚠️ Falha na classificação: ${esc(idea.ai_error)} — toque em Reclassificar.</div>` : '';
+
+  let verticaisHtml = '';
+  if (idea.area) verticaisHtml += `<span class="tag" style="font-size:12px;padding:4px 10px;background:#EDE7F6;color:#6C5CE7">${esc(idea.area)}</span>`;
+  if (idea.context) verticaisHtml += `<span class="tag" style="font-size:12px;padding:4px 10px;background:#E3F2FD;color:#0984E3">${esc(idea.context)}</span>`;
+  if (idea.actionable) verticaisHtml += `<span class="tag" style="font-size:12px;padding:4px 10px;background:#E0F7EF;color:#00B894">✓ Acionável</span>`;
+  const verticaisBlock = verticaisHtml ? `<div class="detail-label">Verticais</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">${verticaisHtml}</div>` : '';
+  const nextStepBlock = (idea.actionable && idea.next_step) ? `<div class="detail-label">Próximo passo</div><div class="detail-text" style="color:#00B894;font-weight:500">${esc(idea.next_step)}</div>` : '';
 
   return `<div class="header">
     <button class="back-btn" id="btn-back">←</button>
@@ -491,7 +586,13 @@ function renderDetail() {
       <span style="font-size:12px;color:#b2bec3">${fmtDate(idea.created_at)}</span>
       <select id="status-select" style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;color:#0984E3;background:#E3F2FD;border:none;outline:none">${statusOpts}</select>
     </div>
+    ${errHtml}
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <button class="btn-secondary" id="btn-edit" style="flex:1">✎ Editar</button>
+      <button class="btn-secondary" id="btn-reclassify" style="flex:1">↻ Reclassificar</button>
+    </div>
     ${idea.ai_summary ? `<div class="detail-label">Resumo IA</div><div class="detail-text" style="color:#6C5CE7;font-weight:500;font-size:14px">${esc(idea.ai_summary)}</div>` : ''}
+    ${verticaisBlock}${nextStepBlock}
     ${photoHtml}${ocrHtml}
     <div class="detail-label">${idea.content_type === 'voice' ? 'Transcrição' : idea.content_type === 'photo' ? 'Observações' : 'Conteúdo'}</div>
     <div class="detail-text">${esc(idea.raw_text || '(sem texto)')}</div>
@@ -556,8 +657,11 @@ function bindEvents() {
   document.querySelectorAll('[data-filter-status]').forEach(el => el.addEventListener('click', () => {
     state.filterStatus = el.dataset.filterStatus === state.filterStatus ? 'all' : el.dataset.filterStatus; render();
   }));
+  document.querySelectorAll('[data-filter-area]').forEach(el => el.addEventListener('click', () => {
+    state.filterArea = el.dataset.filterArea === state.filterArea ? 'all' : el.dataset.filterArea; render();
+  }));
   document.querySelectorAll('.card[data-id]').forEach(el => el.addEventListener('click', () => {
-    state.selectedId = el.dataset.id; state.view = 'detail'; render();
+    state.selectedId = el.dataset.id; state.view = 'detail'; state.editing = false; render();
   }));
 
   // Back
@@ -603,6 +707,44 @@ function bindEvents() {
       idea.updated_at = new Date().toISOString();
       await Store.put(idea); render(); showToast('Status atualizado');
     }
+  });
+  document.getElementById('btn-reclassify')?.addEventListener('click', async () => {
+    const idea = state.ideas.find(i => i.id === state.selectedId);
+    if (!idea) return;
+    if (!state.apiKey) { showToast('Configure a API key primeiro'); state.view = 'settings'; render(); return; }
+    state.classifying.add(idea.id); render(); showToast('Classificando...');
+    let ai;
+    if (idea.content_type === 'photo' && idea.photo_base64) ai = await classifyPhoto(idea.photo_base64, state.apiKey);
+    else if (idea.raw_text) ai = await classifyText(idea.raw_text, state.apiKey);
+    if (ai) {
+      applyClassification(idea, ai);
+      await Store.put(idea);
+      const idx = state.ideas.findIndex(i => i.id === idea.id); if (idx >= 0) state.ideas[idx] = idea;
+    }
+    state.classifying.delete(idea.id);
+    render();
+    if (ai && !ai._error) showToast('Reclassificado!');
+  });
+
+  // Detail — edit mode
+  document.getElementById('btn-edit')?.addEventListener('click', () => { state.editing = true; render(); });
+  const cancelEdit = () => { state.editing = false; render(); };
+  document.getElementById('btn-edit-cancel')?.addEventListener('click', cancelEdit);
+  document.getElementById('btn-edit-cancel2')?.addEventListener('click', cancelEdit);
+  document.getElementById('btn-edit-save')?.addEventListener('click', async () => {
+    const idea = state.ideas.find(i => i.id === state.selectedId);
+    if (!idea) return;
+    idea.raw_text = document.getElementById('edit-text')?.value?.trim() || '';
+    idea.category = document.getElementById('edit-cat')?.value || 'indefinido';
+    idea.area = (document.getElementById('edit-area')?.value || '').trim().slice(0, 40);
+    idea.context = (document.getElementById('edit-context')?.value || '').trim().slice(0, 40);
+    idea.actionable = !!document.getElementById('edit-actionable')?.checked;
+    idea.next_step = (document.getElementById('edit-nextstep')?.value || '').trim();
+    idea.tags = (document.getElementById('edit-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean).slice(0, 5);
+    idea.updated_at = new Date().toISOString();
+    await Store.put(idea);
+    const idx = state.ideas.findIndex(i => i.id === idea.id); if (idx >= 0) state.ideas[idx] = idea;
+    state.editing = false; render(); showToast('Salvo');
   });
 
   // Settings
@@ -708,8 +850,13 @@ async function saveCapture() {
     photo_base64: photo,
     ocr_text: null,
     category: 'indefinido',
+    area: '',
+    context: '',
+    actionable: false,
+    next_step: '',
     tags: [],
     ai_summary: '',
+    ai_error: null,
     status: 'inbox',
     group_id: null,
     exported: false,
@@ -734,11 +881,7 @@ async function saveCapture() {
     else if (rawText) ai = await classifyText(rawText, state.apiKey);
 
     if (ai) {
-      entry.category = ai.category || 'indefinido';
-      entry.tags = ai.tags || [];
-      entry.ai_summary = ai.summary || '';
-      if (ai.extracted_text) { entry.ocr_text = ai.extracted_text; entry.raw_text = entry.raw_text || ai.extracted_text; }
-      entry.updated_at = new Date().toISOString();
+      applyClassification(entry, ai);
       await Store.put(entry);
       const idx = state.ideas.findIndex(i => i.id === entry.id);
       if (idx >= 0) state.ideas[idx] = entry;
