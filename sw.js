@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ideias-v2';
+const CACHE_NAME = 'ideias-v3';
 // Local assets must be cached for offline to work — install fails if any are missing.
 const CORE_ASSETS = [
   './',
