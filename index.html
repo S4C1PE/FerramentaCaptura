@@ -265,7 +265,7 @@ Anotação: "${text.substring(0, 500)}"` }]
     if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     return sanitizeAiResponse(JSON.parse(raw));
-  } catch (e) { console.error('AI error:', e); showToast('Erro IA: ' + e.message); return { category: 'indefinido', tags: [], summary: '' }; }
+  } catch (e) { console.error('AI error:', e); alert('Erro IA (texto): ' + e.message); return { category: 'indefinido', tags: [], summary: '' }; }
 }
 
 async function classifyPhoto(base64, apiKey) {
@@ -288,7 +288,7 @@ Responda APENAS JSON: {"extracted_text":"...","category":"...","tags":["..."],"s
     if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     return sanitizeAiResponse(JSON.parse(raw));
-  } catch (e) { console.error('Photo AI error:', e); showToast('Erro IA: ' + e.message); return { extracted_text: '', category: 'indefinido', tags: [], summary: '' }; }
+  } catch (e) { console.error('Photo AI error:', e); alert('Erro IA (foto): ' + e.message); return { extracted_text: '', category: 'indefinido', tags: [], summary: '' }; }
 }
 
 // ── App State ──
