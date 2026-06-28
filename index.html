@@ -328,6 +328,35 @@ function applyClassification(entry, ai) {
   entry.updated_at = new Date().toISOString();
 }
 
+// Backup: compartilha (Web Share) ou baixa o JSON. Retorna false se o usuário cancelar.
+async function exportIdeas(viaShare) {
+  const json = JSON.stringify(state.ideas, null, 2);
+  const filename = `ideias_export_${new Date().toISOString().slice(0, 10)}.json`;
+  let shared = false;
+  if (viaShare && navigator.canShare) {
+    try {
+      const file = new File([json], filename, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Backup Captura de Ideias' });
+        shared = true;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return false; // usuário fechou a folha de compartilhamento
+      console.warn('Compartilhar falhou, baixando:', e);
+    }
+  }
+  if (!shared) {
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+  }
+  await Store.setSetting('lastExportDate', new Date().toISOString());
+  state.showExportReminder = false;
+  return true;
+}
+
 // ── App State ──
 let state = {
   view: 'inbox', // inbox | capture | detail | settings
@@ -346,6 +375,8 @@ let state = {
   photoBase64: null,
   photoPreview: null,
   editing: false,
+  selectMode: false,
+  selectedIds: new Set(),
 };
 
 let recognition = null;
@@ -416,17 +447,27 @@ function renderInbox() {
       const isClassifying = state.classifying.has(idea.id);
       const tagsHtml = (idea.tags || []).slice(0, 2).map(t => `<span class="tag">${esc(t)}</span>`).join('');
       const areaHtml = idea.area ? `<span class="tag" style="background:#EDE7F6;color:#6C5CE7">${esc(idea.area)}</span>` : '';
+      const groupHtml = idea.group_name ? `<span class="tag" style="background:#FEF5E7;color:#E17055">📁 ${esc(idea.group_name)}</span>` : '';
       const typeIcon = `<span class="type-icon" style="background:${idea.content_type === 'voice' ? '#FEF5E7' : idea.content_type === 'photo' ? '#E3F2FD' : '#F1F2F3'}">${TYPE_ICON[idea.content_type] || '✏️'}</span>`;
       const badge = isClassifying
         ? `<span class="classifying">⚡ Classificando...</span>`
         : `<span class="cat-badge" style="color:${cat.color};background:${cat.bg}">${cat.label}</span>`;
+      const selected = state.selectedIds.has(idea.id);
+      const checkbox = state.selectMode ? `<span style="margin-right:8px">${selected ? '☑️' : '⬜'}</span>` : '';
 
-      cards += `<div class="card" data-id="${idea.id}">
-        <div class="card-text">${esc(idea.ai_summary || idea.raw_text || '(foto sem texto)')}</div>
-        <div class="card-meta">${typeIcon}${badge}${areaHtml}${tagsHtml}<span class="time">${fmtRelative(idea.created_at)}</span></div>
+      cards += `<div class="card" data-id="${idea.id}" style="${selected ? 'border-color:#6C5CE7;background:#f3f0ff' : ''}">
+        <div class="card-text">${checkbox}${esc(idea.ai_summary || idea.raw_text || '(foto sem texto)')}</div>
+        <div class="card-meta">${typeIcon}${badge}${areaHtml}${groupHtml}${tagsHtml}<span class="time">${fmtRelative(idea.created_at)}</span></div>
       </div>`;
     }
   }
+
+  const nSel = state.selectedIds.size;
+  const bulkBar = (state.selectMode && nSel > 0) ? `<div style="position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#1a1a2e;display:flex;gap:6px;padding:12px;z-index:30">
+    <button id="btn-bulk-reclass" style="flex:1;padding:10px 0;border:none;border-radius:10px;background:#3a3a5e;color:#fff;font-size:13px;font-weight:600;cursor:pointer">↻ Reclassificar (${nSel})</button>
+    <button id="btn-bulk-group" style="flex:1;padding:10px 0;border:none;border-radius:10px;background:#3a3a5e;color:#fff;font-size:13px;font-weight:600;cursor:pointer">📁 Agrupar (${nSel})</button>
+    <button id="btn-bulk-delete" style="flex:1;padding:10px 0;border:none;border-radius:10px;background:#E17055;color:#fff;font-size:13px;font-weight:600;cursor:pointer">🗑️ Excluir (${nSel})</button>
+  </div>` : '';
 
   const noKey = !state.apiKey ? `<div style="margin:8px 16px;padding:10px 14px;background:#FEF5E7;border-radius:10px;font-size:12px;color:#7D6608;cursor:pointer" id="no-key-banner">⚠️ API key não configurada — toque para configurar</div>` : '';
 
@@ -442,8 +483,11 @@ function renderInbox() {
       <span class="header-title">Captura de Ideias</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:12px;color:#b2bec3;font-weight:600">${inboxCount} na inbox</span>
-      <button class="gear-btn" id="btn-settings">⚙️</button>
+      ${state.selectMode
+        ? `<button class="gear-btn" id="btn-select-cancel" style="font-size:13px;color:#6C5CE7;font-weight:700;width:auto">Concluir</button>`
+        : `<span style="font-size:12px;color:#b2bec3;font-weight:600">${inboxCount} na inbox</span>
+           <button class="gear-btn" id="btn-select" title="Selecionar">☑️</button>
+           <button class="gear-btn" id="btn-settings">⚙️</button>`}
     </div>
   </div>
   <div class="content">
@@ -459,7 +503,8 @@ function renderInbox() {
     <div class="filters" style="padding-bottom:4px">${statusChips}</div>
     ${cards}
   </div>
-  <button class="fab" id="btn-new">+</button>`;
+  ${bulkBar}
+  ${state.selectMode ? '' : '<button class="fab" id="btn-new">+</button>'}`;
 }
 
 // ── CAPTURE ──
@@ -618,9 +663,12 @@ function renderSettings() {
     <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." value="${esc(state.apiKey || '')}">
     <p class="info">Obtenha em <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:#6C5CE7">console.anthropic.com</a></p>
     <button class="save-btn" id="btn-save-settings">Salvar configurações</button>
+    <h3 style="font-size:15px;color:#1a1a2e;margin-bottom:4px;margin-top:24px">Backup</h3>
+    <p class="info">Seus dados ficam só neste aparelho. Faça backup com frequência para não perder nada.</p>
+    <button class="save-btn" id="btn-share-backup" style="background:#00B894">📤 Fazer backup (compartilhar)</button>
+    <button class="danger-btn" id="btn-export" style="background:#f1f2f3;color:#636e72;border-color:#e0e3e8">📦 Baixar JSON (download direto)</button>
     <div class="danger-zone">
       <h3 style="font-size:14px;color:#E17055;margin-bottom:4px">Zona de risco</h3>
-      <button class="danger-btn" id="btn-export">📦 Exportar todas as ideias (JSON)</button>
       <button class="danger-btn" id="btn-clear-all" style="background:#fde;border-color:#e8b;color:#c0392b">🗑️ Apagar todas as ideias</button>
     </div>
   </div>`;
@@ -633,15 +681,8 @@ function bindEvents() {
   document.getElementById('btn-settings')?.addEventListener('click', () => { state.view = 'settings'; render(); });
   document.getElementById('no-key-banner')?.addEventListener('click', () => { state.view = 'settings'; render(); });
   document.getElementById('export-reminder-action')?.addEventListener('click', async () => {
-    const json = JSON.stringify(state.ideas, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `ideias_export_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    await Store.setSetting('lastExportDate', new Date().toISOString());
-    state.showExportReminder = false;
-    render(); showToast('Exportado!');
+    const ok = await exportIdeas(true);
+    render(); if (ok) showToast('Backup feito!');
   });
   document.getElementById('export-reminder-dismiss')?.addEventListener('click', async () => {
     state.showExportReminder = false;
@@ -661,8 +702,60 @@ function bindEvents() {
     state.filterArea = el.dataset.filterArea === state.filterArea ? 'all' : el.dataset.filterArea; render();
   }));
   document.querySelectorAll('.card[data-id]').forEach(el => el.addEventListener('click', () => {
-    state.selectedId = el.dataset.id; state.view = 'detail'; state.editing = false; render();
+    if (state.selectMode) {
+      const id = el.dataset.id;
+      if (state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id);
+      render();
+    } else {
+      state.selectedId = el.dataset.id; state.view = 'detail'; state.editing = false; render();
+    }
   }));
+
+  // Seleção em lote
+  document.getElementById('btn-select')?.addEventListener('click', () => { state.selectMode = true; state.selectedIds = new Set(); render(); });
+  document.getElementById('btn-select-cancel')?.addEventListener('click', () => { state.selectMode = false; state.selectedIds = new Set(); render(); });
+  document.getElementById('btn-bulk-delete')?.addEventListener('click', async () => {
+    const ids = [...state.selectedIds];
+    if (!ids.length) return;
+    if (!confirm(`Excluir ${ids.length} ideia(s)?`)) return;
+    for (const id of ids) await Store.delete(id);
+    state.ideas = state.ideas.filter(i => !state.selectedIds.has(i.id));
+    state.selectedIds = new Set(); state.selectMode = false;
+    render(); showToast('Excluídas');
+  });
+  document.getElementById('btn-bulk-group')?.addEventListener('click', async () => {
+    const ids = [...state.selectedIds];
+    if (!ids.length) return;
+    const name = (prompt('Nome do grupo:') || '').trim();
+    if (!name) return;
+    const gid = uuid();
+    for (const id of ids) {
+      const idea = state.ideas.find(i => i.id === id);
+      if (idea) { idea.group_id = gid; idea.group_name = name; idea.updated_at = new Date().toISOString(); await Store.put(idea); }
+    }
+    state.selectedIds = new Set(); state.selectMode = false;
+    render(); showToast('Agrupadas');
+  });
+  document.getElementById('btn-bulk-reclass')?.addEventListener('click', async () => {
+    const ids = [...state.selectedIds];
+    if (!ids.length) return;
+    if (!state.apiKey) { showToast('Configure a API key primeiro'); state.selectMode = false; state.view = 'settings'; render(); return; }
+    state.selectMode = false;
+    ids.forEach(id => state.classifying.add(id));
+    state.selectedIds = new Set();
+    render(); showToast('Reclassificando ' + ids.length + '...');
+    for (const id of ids) {
+      const idea = state.ideas.find(i => i.id === id);
+      if (!idea) { state.classifying.delete(id); continue; }
+      let ai;
+      if (idea.content_type === 'photo' && idea.photo_base64) ai = await classifyPhoto(idea.photo_base64, state.apiKey);
+      else if (idea.raw_text) ai = await classifyText(idea.raw_text, state.apiKey);
+      if (ai) { applyClassification(idea, ai); await Store.put(idea); }
+      state.classifying.delete(id);
+      render();
+    }
+    showToast('Reclassificação concluída');
+  });
 
   // Back
   document.getElementById('btn-back')?.addEventListener('click', () => {
@@ -755,16 +848,13 @@ function bindEvents() {
     showToast('Configurações salvas');
     state.view = 'inbox'; render();
   });
+  document.getElementById('btn-share-backup')?.addEventListener('click', async () => {
+    const ok = await exportIdeas(true);
+    if (ok) showToast('Backup feito!');
+  });
   document.getElementById('btn-export')?.addEventListener('click', async () => {
-    const json = JSON.stringify(state.ideas, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `ideias_export_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    await Store.setSetting('lastExportDate', new Date().toISOString());
-    state.showExportReminder = false;
-    showToast('Exportado!');
+    await exportIdeas(false);
+    showToast('Baixado!');
   });
   document.getElementById('btn-clear-all')?.addEventListener('click', async () => {
     if (confirm('Tem certeza? Todas as ideias serão apagadas permanentemente.')) {
@@ -859,6 +949,7 @@ async function saveCapture() {
     ai_error: null,
     status: 'inbox',
     group_id: null,
+    group_name: '',
     exported: false,
     export_date: null,
   };
