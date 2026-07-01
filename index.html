@@ -240,12 +240,13 @@ const AREAS_BASE = ['Trabalho', 'Casa', 'Carro', 'Saúde', 'Finanças', 'Hobbies
 const CONTEXTS_BASE = ['@computador', '@celular', '@rua', '@ligar', '@comprar', '@casa', '@aguardando'];
 
 function sanitizeAiResponse(ai) {
-  if (!ai || typeof ai !== 'object') return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '' };
+  if (!ai || typeof ai !== 'object') return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', quickwin: false, tags: [], summary: '' };
   if (!VALID_CATS.includes(ai.category)) ai.category = 'indefinido';
   ai.area = (typeof ai.area === 'string' ? ai.area : '').trim().slice(0, 40);
   ai.context = (typeof ai.context === 'string' ? ai.context : '').trim().slice(0, 40);
   ai.actionable = ai.actionable === true || ai.actionable === 'true';
   ai.next_step = (typeof ai.next_step === 'string' ? ai.next_step : '').trim();
+  ai.quickwin = ai.quickwin === true || ai.quickwin === 'true';
   if (!Array.isArray(ai.tags)) ai.tags = [];
   ai.tags = ai.tags.filter(t => typeof t === 'string').slice(0, 5);
   if (typeof ai.summary !== 'string') ai.summary = '';
@@ -254,7 +255,7 @@ function sanitizeAiResponse(ai) {
 }
 
 async function classifyText(text, apiKey) {
-  if (!apiKey) return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '' };
+  if (!apiKey) return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', quickwin: false, tags: [], summary: '' };
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -267,9 +268,10 @@ async function classifyText(text, apiKey) {
 - "context": contexto GTD de onde/com o quê agir (formato @algo). Prefira um destes, mas crie outro se necessário: ${CONTEXTS_BASE.join(', ')}. Use "" se não se aplica.
 - "actionable": true se exige uma ação concreta, senão false.
 - "next_step": se actionable, a próxima ação concreta em poucas palavras; senão "".
+- "quickwin": true se for um ganho rápido (baixo esforço e impacto perceptível, resolvível em poucos minutos), senão false.
 - "tags": 1 a 3 tags curtas em português.
 - "summary": resumo de no máximo 10 palavras.
-Responda APENAS JSON: {"category":"...","area":"...","context":"...","actionable":false,"next_step":"...","tags":["..."],"summary":"..."}
+Responda APENAS JSON: {"category":"...","area":"...","context":"...","actionable":false,"next_step":"...","quickwin":false,"tags":["..."],"summary":"..."}
 
 Anotação: "${text.substring(0, 500)}"` }]
       })
@@ -278,11 +280,11 @@ Anotação: "${text.substring(0, 500)}"` }]
     if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     return sanitizeAiResponse(JSON.parse(raw));
-  } catch (e) { console.error('AI error:', e); showToast('Erro IA: ' + e.message); return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '', _error: e.message }; }
+  } catch (e) { console.error('AI error:', e); showToast('Erro IA: ' + e.message); return { category: 'indefinido', area: '', context: '', actionable: false, next_step: '', quickwin: false, tags: [], summary: '', _error: e.message }; }
 }
 
 async function classifyPhoto(base64, apiKey) {
-  if (!apiKey) return { extracted_text: '', category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '' };
+  if (!apiKey) return { extracted_text: '', category: 'indefinido', area: '', context: '', actionable: false, next_step: '', quickwin: false, tags: [], summary: '' };
   try {
     const mt = base64.startsWith('/9j') ? 'image/jpeg' : 'image/png';
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -299,9 +301,10 @@ async function classifyPhoto(base64, apiKey) {
 - "context": contexto GTD (formato @algo). Prefira um destes, mas crie outro se necessário: ${CONTEXTS_BASE.join(', ')}. Use "" se não se aplica.
 - "actionable": true se exige uma ação concreta, senão false.
 - "next_step": se actionable, a próxima ação concreta em poucas palavras; senão "".
+- "quickwin": true se for um ganho rápido (baixo esforço e impacto perceptível), senão false.
 - "tags": 1 a 3 tags curtas em português.
 - "summary": resumo de no máximo 10 palavras.
-Responda APENAS JSON: {"extracted_text":"...","category":"...","area":"...","context":"...","actionable":false,"next_step":"...","tags":["..."],"summary":"..."}` }
+Responda APENAS JSON: {"extracted_text":"...","category":"...","area":"...","context":"...","actionable":false,"next_step":"...","quickwin":false,"tags":["..."],"summary":"..."}` }
         ]}]
       })
     });
@@ -309,7 +312,7 @@ Responda APENAS JSON: {"extracted_text":"...","category":"...","area":"...","con
     if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     return sanitizeAiResponse(JSON.parse(raw));
-  } catch (e) { console.error('Photo AI error:', e); showToast('Erro IA: ' + e.message); return { extracted_text: '', category: 'indefinido', area: '', context: '', actionable: false, next_step: '', tags: [], summary: '', _error: e.message }; }
+  } catch (e) { console.error('Photo AI error:', e); showToast('Erro IA: ' + e.message); return { extracted_text: '', category: 'indefinido', area: '', context: '', actionable: false, next_step: '', quickwin: false, tags: [], summary: '', _error: e.message }; }
 }
 
 // Aplica o resultado da IA num item (usado na captura e na reclassificação)
@@ -321,11 +324,45 @@ function applyClassification(entry, ai) {
   entry.context = ai.context || '';
   entry.actionable = !!ai.actionable;
   entry.next_step = ai.next_step || '';
+  entry.quickwin = !!ai.quickwin;
   entry.tags = ai.tags || [];
   entry.ai_summary = ai.summary || '';
   if (ai.extracted_text) { entry.ocr_text = ai.extracted_text; entry.raw_text = entry.raw_text || ai.extracted_text; }
   entry.ai_error = null;
   entry.updated_at = new Date().toISOString();
+}
+
+// IA propositiva: lê a inbox e propõe prioridades/quick wins (view "Sugestões")
+async function suggestPriorities(items, apiKey) {
+  if (!apiKey) return { _error: 'API key não configurada' };
+  const slim = items.slice(0, 30).map(i => ({ id: i.id, texto: (i.ai_summary || i.raw_text || '').slice(0, 200), category: i.category, area: i.area || '', actionable: !!i.actionable, next_step: i.next_step || '', quickwin: !!i.quickwin }));
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 700,
+        messages: [{ role: 'user', content: `Você é um assistente de produtividade proativo (GTD + Vida Organizada). Analise a inbox de ideias/tarefas abaixo e proponha, por conta própria, por onde a pessoa deve começar — priorizando impacto positivo vs. esforço.
+Responda APENAS JSON:
+{"proposal":"1-3 frases propositivas sobre por onde começar","priorities":[{"id":"<id>","reason":"por que priorizar, curto"}],"quick_wins":["<id>","<id>"]}
+- "priorities": 3 a 5 itens mais relevantes, do mais para o menos prioritário.
+- "quick_wins": ids de ganhos rápidos (poucos minutos).
+Use apenas ids que existem na lista.
+
+Inbox (JSON): ${JSON.stringify(slim)}` }]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || data.type === 'error') throw new Error(data.error?.message || ('HTTP ' + res.status));
+    const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(raw);
+    const validIds = new Set(items.map(i => i.id));
+    return {
+      proposal: typeof parsed.proposal === 'string' ? parsed.proposal.trim() : '',
+      priorities: Array.isArray(parsed.priorities) ? parsed.priorities.filter(p => p && validIds.has(p.id)).map(p => ({ id: p.id, reason: (typeof p.reason === 'string' ? p.reason : '').trim() })).slice(0, 8) : [],
+      quick_wins: Array.isArray(parsed.quick_wins) ? parsed.quick_wins.filter(id => validIds.has(id)).slice(0, 12) : [],
+    };
+  } catch (e) { console.error('Suggest error:', e); showToast('Erro IA: ' + e.message); return { _error: e.message }; }
 }
 
 // Backup: compartilha (Web Share) ou baixa o JSON. Retorna false se o usuário cancelar.
@@ -367,6 +404,7 @@ let state = {
   filterCat: 'all',
   filterStatus: 'all',
   filterArea: 'all',
+  filterQuickwin: false,
   classifying: new Set(),
   apiKey: null,
   showExportReminder: false,
@@ -377,6 +415,8 @@ let state = {
   editing: false,
   selectMode: false,
   selectedIds: new Set(),
+  suggesting: false,
+  suggestions: null,
 };
 
 let recognition = null;
@@ -394,6 +434,7 @@ function render() {
   if (state.view === 'capture') app.innerHTML = renderCapture();
   else if (state.view === 'detail') app.innerHTML = renderDetail();
   else if (state.view === 'settings') app.innerHTML = renderSettings();
+  else if (state.view === 'suggest') app.innerHTML = renderSuggest();
   else app.innerHTML = renderInbox();
   app.innerHTML += '<div id="toast" class="toast" style="display:none"></div>';
   bindEvents();
@@ -405,6 +446,7 @@ function renderInbox() {
     if (state.filterCat !== 'all' && i.category !== state.filterCat) return false;
     if (state.filterStatus !== 'all' && i.status !== state.filterStatus) return false;
     if (state.filterArea !== 'all' && (i.area || '') !== state.filterArea) return false;
+    if (state.filterQuickwin && !i.quickwin) return false;
     if (state.search) {
       const q = state.search.toLowerCase();
       return (i.raw_text || '').toLowerCase().includes(q) || (i.ai_summary || '').toLowerCase().includes(q) || (i.tags || []).some(t => t.toLowerCase().includes(q));
@@ -418,6 +460,7 @@ function renderInbox() {
     if (k === 'indefinido') continue;
     catChips += `<span class="chip ${state.filterCat === k ? 'active' : ''}" data-filter-cat="${k}">${v.label}</span>`;
   }
+  catChips += `<span class="chip ${state.filterQuickwin ? 'active' : ''}" id="chip-quickwin">⚡ Quickwins</span>`;
 
   let statusChips = `<span class="chip ${state.filterStatus === 'all' ? 'active' : ''}" data-filter-status="all">Todos</span>`;
   for (const [k, v] of Object.entries(STATUS_L)) {
@@ -448,6 +491,7 @@ function renderInbox() {
       const tagsHtml = (idea.tags || []).slice(0, 2).map(t => `<span class="tag">${esc(t)}</span>`).join('');
       const areaHtml = idea.area ? `<span class="tag" style="background:#EDE7F6;color:#6C5CE7">${esc(idea.area)}</span>` : '';
       const groupHtml = idea.group_name ? `<span class="tag" style="background:#FEF5E7;color:#E17055">📁 ${esc(idea.group_name)}</span>` : '';
+      const qwHtml = idea.quickwin ? `<span class="tag" style="background:#FFF3CD;color:#B8860B">⚡</span>` : '';
       const typeIcon = `<span class="type-icon" style="background:${idea.content_type === 'voice' ? '#FEF5E7' : idea.content_type === 'photo' ? '#E3F2FD' : '#F1F2F3'}">${TYPE_ICON[idea.content_type] || '✏️'}</span>`;
       const badge = isClassifying
         ? `<span class="classifying">⚡ Classificando...</span>`
@@ -457,7 +501,7 @@ function renderInbox() {
 
       cards += `<div class="card" data-id="${idea.id}" style="${selected ? 'border-color:#6C5CE7;background:#f3f0ff' : ''}">
         <div class="card-text">${checkbox}${esc(idea.ai_summary || idea.raw_text || '(foto sem texto)')}</div>
-        <div class="card-meta">${typeIcon}${badge}${areaHtml}${groupHtml}${tagsHtml}<span class="time">${fmtRelative(idea.created_at)}</span></div>
+        <div class="card-meta">${typeIcon}${badge}${qwHtml}${areaHtml}${groupHtml}${tagsHtml}<span class="time">${fmtRelative(idea.created_at)}</span></div>
       </div>`;
     }
   }
@@ -477,6 +521,8 @@ function renderInbox() {
     <button id="export-reminder-dismiss" style="background:none;border:none;color:#0984E3;font-size:16px;cursor:pointer;padding:0 0 0 8px">✕</button>
   </div>` : '';
 
+  const suggestBanner = (!state.selectMode && inboxCount > 0) ? `<div id="btn-suggest" style="margin:8px 16px;padding:12px 14px;background:linear-gradient(135deg,#6C5CE7,#a855f7);border-radius:10px;font-size:13px;color:#fff;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px">💡 Sugestões da IA — por onde começar</div>` : '';
+
   return `<div class="header">
     <div style="display:flex;align-items:center;gap:8px">
       <span style="font-size:18px">⚡</span>
@@ -493,6 +539,7 @@ function renderInbox() {
   <div class="content">
     ${noKey}
     ${exportReminder}
+    ${suggestBanner}
     <div class="search-bar">
       <span style="color:#b2bec3">🔍</span>
       <input type="text" placeholder="Buscar ideias..." value="${esc(state.search)}" id="search-input">
@@ -505,6 +552,59 @@ function renderInbox() {
   </div>
   ${bulkBar}
   ${state.selectMode ? '' : '<button class="fab" id="btn-new">+</button>'}`;
+}
+
+// ── SUGESTÕES (IA propositiva) ──
+function renderSuggest() {
+  const header = `<div class="header">
+    <button class="back-btn" id="btn-back">←</button>
+    <span class="header-title">💡 Sugestões da IA</span>
+    <button class="gear-btn" id="btn-suggest-refresh" title="Atualizar">↻</button>
+  </div>`;
+
+  let body;
+  if (state.suggesting) {
+    body = `<div class="empty"><span class="classifying" style="font-size:14px">⚡ Analisando sua inbox...</span></div>`;
+  } else if (!state.suggestions) {
+    body = `<div class="empty"><span style="font-size:13px">Toque em ↻ para gerar sugestões</span></div>`;
+  } else if (state.suggestions._error) {
+    body = `<div style="margin:16px;padding:12px 14px;background:#FDECEA;border-radius:10px;font-size:13px;color:#c0392b">Falha ao gerar sugestões: ${esc(state.suggestions._error)}</div>`;
+  } else {
+    const s = state.suggestions;
+    const byId = id => state.ideas.find(i => i.id === id);
+    let prioHtml = '';
+    for (const p of (s.priorities || [])) {
+      const idea = byId(p.id); if (!idea) continue;
+      prioHtml += `<div class="card" data-id="${idea.id}">
+        <div class="card-text">${esc(idea.ai_summary || idea.raw_text || '(sem texto)')}</div>
+        ${p.reason ? `<div style="font-size:12px;color:#6C5CE7;margin-top:6px">→ ${esc(p.reason)}</div>` : ''}
+      </div>`;
+    }
+    let qwHtml = '';
+    for (const id of (s.quick_wins || [])) {
+      const idea = byId(id); if (!idea) continue;
+      qwHtml += `<div class="card" data-id="${idea.id}">
+        <div class="card-text">⚡ ${esc(idea.ai_summary || idea.raw_text || '(sem texto)')}</div>
+      </div>`;
+    }
+    body = `
+      ${s.proposal ? `<div style="margin:12px 16px;padding:14px;background:#f3f0ff;border-radius:12px;font-size:14px;color:#1a1a2e;line-height:1.5">${esc(s.proposal)}</div>` : ''}
+      ${prioHtml ? `<div class="detail-label" style="margin:8px 16px">Prioridades</div>${prioHtml}` : ''}
+      ${qwHtml ? `<div class="detail-label" style="margin:16px 16px 8px">Quick wins</div>${qwHtml}` : ''}
+      ${(!prioHtml && !qwHtml) ? `<div class="empty"><span style="font-size:13px">A IA não retornou sugestões desta vez. Toque em ↻ para tentar de novo.</span></div>` : ''}
+    `;
+  }
+
+  return `${header}<div class="content">${body}</div>`;
+}
+
+async function runSuggest() {
+  if (!state.apiKey) { showToast('Configure a API key primeiro'); state.view = 'settings'; render(); return; }
+  const inbox = state.ideas.filter(i => i.status === 'inbox');
+  if (!inbox.length) { state.suggestions = { proposal: 'Inbox vazia — nada a priorizar. 🎉', priorities: [], quick_wins: [] }; render(); return; }
+  state.suggesting = true; state.suggestions = null; render();
+  const result = await suggestPriorities(inbox, state.apiKey);
+  state.suggesting = false; state.suggestions = result; render();
 }
 
 // ── CAPTURE ──
@@ -591,6 +691,7 @@ function renderDetail() {
         <input type="text" id="edit-context" list="ctx-list" value="${esc(idea.context || '')}" placeholder="ex.: @computador, @comprar...">
         <datalist id="ctx-list">${ctxOpts}</datalist>
         <label style="display:flex;align-items:center;gap:8px;margin-top:16px"><input type="checkbox" id="edit-actionable" ${idea.actionable ? 'checked' : ''} style="width:auto"> Acionável</label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="edit-quickwin" ${idea.quickwin ? 'checked' : ''} style="width:auto"> ⚡ Quick win (ganho rápido)</label>
         <label>Próximo passo (se acionável)</label>
         <input type="text" id="edit-nextstep" value="${esc(idea.next_step || '')}" placeholder="ex.: ligar na concessionária">
         <label>Tags (separadas por vírgula)</label>
@@ -617,6 +718,7 @@ function renderDetail() {
   if (idea.area) verticaisHtml += `<span class="tag" style="font-size:12px;padding:4px 10px;background:#EDE7F6;color:#6C5CE7">${esc(idea.area)}</span>`;
   if (idea.context) verticaisHtml += `<span class="tag" style="font-size:12px;padding:4px 10px;background:#E3F2FD;color:#0984E3">${esc(idea.context)}</span>`;
   if (idea.actionable) verticaisHtml += `<span class="tag" style="font-size:12px;padding:4px 10px;background:#E0F7EF;color:#00B894">✓ Acionável</span>`;
+  if (idea.quickwin) verticaisHtml += `<span class="tag" style="font-size:12px;padding:4px 10px;background:#FFF3CD;color:#B8860B">⚡ Quick win</span>`;
   const verticaisBlock = verticaisHtml ? `<div class="detail-label">Verticais</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">${verticaisHtml}</div>` : '';
   const nextStepBlock = (idea.actionable && idea.next_step) ? `<div class="detail-label">Próximo passo</div><div class="detail-text" style="color:#00B894;font-weight:500">${esc(idea.next_step)}</div>` : '';
 
@@ -701,6 +803,10 @@ function bindEvents() {
   document.querySelectorAll('[data-filter-area]').forEach(el => el.addEventListener('click', () => {
     state.filterArea = el.dataset.filterArea === state.filterArea ? 'all' : el.dataset.filterArea; render();
   }));
+  document.getElementById('chip-quickwin')?.addEventListener('click', () => { state.filterQuickwin = !state.filterQuickwin; render(); });
+  // Sugestões (IA propositiva)
+  document.getElementById('btn-suggest')?.addEventListener('click', () => { state.view = 'suggest'; runSuggest(); });
+  document.getElementById('btn-suggest-refresh')?.addEventListener('click', runSuggest);
   document.querySelectorAll('.card[data-id]').forEach(el => el.addEventListener('click', () => {
     if (state.selectMode) {
       const id = el.dataset.id;
@@ -832,6 +938,7 @@ function bindEvents() {
     idea.area = (document.getElementById('edit-area')?.value || '').trim().slice(0, 40);
     idea.context = (document.getElementById('edit-context')?.value || '').trim().slice(0, 40);
     idea.actionable = !!document.getElementById('edit-actionable')?.checked;
+    idea.quickwin = !!document.getElementById('edit-quickwin')?.checked;
     idea.next_step = (document.getElementById('edit-nextstep')?.value || '').trim();
     idea.tags = (document.getElementById('edit-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean).slice(0, 5);
     idea.updated_at = new Date().toISOString();
@@ -944,6 +1051,7 @@ async function saveCapture() {
     context: '',
     actionable: false,
     next_step: '',
+    quickwin: false,
     tags: [],
     ai_summary: '',
     ai_error: null,
